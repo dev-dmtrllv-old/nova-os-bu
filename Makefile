@@ -3,6 +3,10 @@ out/boot.bin: src/boot/boot.asm
 	@mkdir -p out
 	nasm -f bin $^ -o $@
 
+out/init.bin: src/boot/init.asm
+	@mkdir -p out
+	nasm -f bin $^ -o $@
+
 dump: os.img
 	xxd $^ > os.dump
 
@@ -16,9 +20,11 @@ debug: os.img
 test:
 	qemu-system-x86_64 -drive file=os.img,format=raw -m 1024 -vga std
 
-os.img:	out/boot.bin
+os.img:	out/boot.bin out/init.bin
 	test -e $@ || mkfs.fat -F 16 -C $@ 512000
-	dd if=$^ of=os.img conv=notrunc bs=512 count=1
+	dd if=out/boot.bin of=$@ conv=notrunc bs=512 count=1
+	dd if=out/init.bin of=$@ conv=notrunc bs=512 seek=1 count=1
+	# echo -n "Hello World, This is some text in the second sector!!!" | dd of=$@ conv=notrunc seek=1 bs=512 count=1
 	
 clean:
 	rm -rf out/*
