@@ -63,9 +63,6 @@ boot_start:
 	jc err_extended_drive_ext
 
 	; read first sector after the bootloader
-	; first setup disk adress packet
-
-
 	; then read the sector into ds:si
 	mov ah, 0x42
 	mov dx, word [drive]
