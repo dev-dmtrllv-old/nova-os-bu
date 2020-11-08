@@ -3,15 +3,15 @@ out/boot.bin: src/boot/boot.asm
 	@mkdir -p out
 	nasm -f bin $^ -o $@
 
-out/init.bin: src/boot/init.asm
+kernel_loader: src/boot/kernel_loader.asm
 	@mkdir -p out
-	nasm -f bin $^ -o $@
+	nasm -f bin $^ -o out/NOVALDR.SYS
 
 dump: os.img
 	xxd $^ > os.dump
 
 run: os.img
-	qemu-system-x86_64 -drive file=$^,format=raw -m 1024 -vga std
+	qemu-system-x86_64 -drive file=$^,format=raw -m 1024 -vga std -serial stdio
 
 os.img:	out/boot.bin
 	test -e $@ || mkfs.fat -F 16 -C $@ 512000

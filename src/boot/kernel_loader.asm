@@ -1,4 +1,5 @@
-[org 0x7e00]
+; TODO: change the org and stuff
+[org 0x0]
 bits 16
 
 jmp main

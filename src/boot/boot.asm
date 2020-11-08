@@ -1,12 +1,6 @@
 [bits 16]
 [org 0x7c00]
 
-
-FAT16_EOF		equ	0FFF8h 
-BOOT_ADR		equ	0x7c00
-ROOT_DIR_ADR	equ (BOOT_ADR + 200)		; 512 bytes for root directory
-FAT_TABLE_ADR	equ (ROOT_DIR_ADR + 200)	; 512 bytes for fat table
-
 entry:
 	jmp short boot_start
 	nop
@@ -56,35 +50,90 @@ boot_start:
 	mov si, msg_loading
 	call print_line
 
+
+	; REMOVED BECAUSE OF THERE IS NOT ENOUGH SPACE IN 512 BYTES
 	; check if extended drive bios interrupts are available
-	mov ah, 0x41
-	mov bx, 0x55aa
-	mov dx, word [drive]
-	jc err_extended_drive_ext
+	; mov ah, 0x41
+	; mov bx, 0x55aa
+	; mov dx, word [drive]
+	; jc err_extended_drive_ext
 
-	; read first sector after the bootloader
-	; then read the sector into ds:si
-	mov ah, 0x42
-	mov dx, word [drive]
+
+; LOAD_ROOT: 
+	; store size of root directory into disk address packets -> sectors_number (the number of sectors to loader)
+    mov ax, 0x0020                      ; 32 byte directory entry
+    mul word [rootDirEntries]           ; total size of directory
+    div word [bytesPerSector]        	; sectors used by directory
+    mov word [dap_sectors_number], ax
+          
+	; store location of root directory into disk adress packet -> lba
+	mov al, byte [numberOfFats]
+	mul word [sectorsPerFat]
+	add ax, word [reservedSectors]
+	mov word [datasector], ax
+	add word [datasector], cx
+	mov word [dap_lba], ax
+
+	; setup destination to load root directory in 0x0000:0x7e00
 	xor bx, bx
-	mov es, bx        			; ES=0x0000
-	mov bx, 0x7e00    			; ES:BX(0x0000:0x8000) forms complete address to read sectors to
-	mov si, dap
-	int 0x13
-	jc err_read_drive_sect
+	mov es, bx
+	mov bx, 0x7e00
 
-	jmp 0x0000:0x7e00			; jump to second stage
+	call read_sectors
+
+	; browse root directory for binary image
+	mov cx, [rootDirEntries]
+	mov di, 0x7e00
+.find_image_loop:
+	push cx
+	mov cx, 11
+	mov si, image_name
+	push di
+	rep cmpsb
+	pop di
+	je found_image
+	pop cx
+	add di, 32
+	loop .find_image_loop
+	jmp err_image_missing
+
+found_image:
+	mov dx, [di + 0x001a]
+	mov word [image_cluster], dx 			; store image cluster number
+
+	; read FAT into 0x8a00
+	xor	ax, ax
+	mov	al, BYTE [numberOfFats]          	; number of FATs
+	mul	WORD [sectorsPerFat]             	; sectors used by FATs
+	mov	[dap_sectors_number], ax			
+
+	mov ax, WORD [reservedSectors]
+	mov [dap_lba], ax
+
+	xor bx, bx
+	mov es, bx
+	mov bx, 0x8a00
+
+	call read_sectors
+
+load_image:
+
+
 	jmp halt_cpu
 	
 ;  errors
-
-err_extended_drive_ext:
-	mov si, msg_extended_drive_err
-	call print_line
-	jmp halt_cpu
+; err_extended_drive_ext:
+; 	mov si, msg_extended_drive_err
+; 	call print_line
+; 	jmp halt_cpu
 
 err_read_drive_sect:
 	mov si, msg_read_drive_err
+	call print_line
+	jmp halt_cpu
+
+err_image_missing:
+	mov si, msg_image_missing
 	call print_line
 
 halt_cpu:
@@ -124,23 +173,43 @@ cls:
 	popa
     ret
 
+read_sectors:
+	xor ax, ax
+	mov ah, 0x42
+	mov dx, word [drive]
+	mov si, dap
+	int 0x13
+	jc err_read_drive_sect
+	ret
+
+read_file:
+	; TODO write routine
+	ret
+
 ;-----------;
 ;	DATA	;
 ;-----------;
 
 ; Disk address packet
 dap:
-packetSize: 	db 0x10 	; packet size
-reserved:   	db 0x0		; 0
-sectorsNumber:  dw 0x1		; sectors to load
-buf_off:    	dw 0x7e00	; where to load
-buf_seg:    	dw 0x0000	; segment where to loader
-lba:        	dd 0x1		; from where to load (chs)
-            	dd 0x0
+dap_packet_size: 		db 0x10 		; packet size
+dap_reserved:   		db 0x0			; 0
+dap_sectors_number:  	dw 0x1			; sectors to load
+dap_buf_off:    		dw 0x7e00		; offset where to load
+dap_buf_seg:    		dw 0x0000		; segment where to load
+dap_lba:        		dd 0x1			; from where to load lba
+            			dd 0x0
+
+
+datasector				dw 0x0000
+image_cluster			dw 0x0000
+
+image_name				dw "NOVALDR SYS", 0
 
 msg_loading				db "Loading Boot Image ", 0
-msg_extended_drive_err	db "Error extended drive not supported by bios!", 0
+; msg_extended_drive_err	db "Error extended drive not supported by bios!", 0
 msg_read_drive_err		db "Error reading sector!", 0
+msg_image_missing		db "Missing Image!", 0
 msg_EOL					db 13, 10, 0
 
 ;---------------------------;
