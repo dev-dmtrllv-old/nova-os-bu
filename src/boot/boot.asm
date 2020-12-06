@@ -216,13 +216,11 @@ dap_lba:        		dd 0x1			; from where to load lba
 datasector				dw 0x0000
 image_cluster			dw 0x0000
 debug					dw 0x0000
-image_name				dw "TEST    TXT", 0
+image_name				dw "CONFIG     ", 0
 msg_loading				db "Loading Boot Image ", 0
 msg_read_drive_err		db "Error reading sector!", 0
 msg_image_missing		db "Missing Image!", 0
 msg_EOL					db 13, 10, 0
-
-%include "src/boot/fs.asm"
 
 ;---------------------------;
 ;	PAD AND BOOT SIGNATURE	;
