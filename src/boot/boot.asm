@@ -56,21 +56,15 @@ boot_start:
     div word [bytesPerSector]        	; sectors used by directory
     mov word [dap_sectors_number], ax 	; set number of sectors in dap
 	xchg ax, cx							; set cx to root dir size (in sectors)
-          
+	
 	; store location of root directory into disk adress packet -> lba
 	mov al, byte [numberOfFats]
 	mul word [sectorsPerFat]
 	add ax, word [reservedSectors]
 	mov word [datasector], ax
 	add word [datasector], cx
-	mov word [debug], cx
 	mov word [dap_lba], ax
-
-	; setup destination to load root directory in 0x0000:0x7e00
-	xor bx, bx
-	mov es, bx
 	mov bx, 0x7e00
-
 	call read_sectors
 
  	; browse root directory for binary image
@@ -95,40 +89,58 @@ found_image:
 
 ; load fat
 	mov cx, word [sectorsPerFat]
+loop:
 	mov ax, 0x4
 	mov word [dap_sectors_number], ax
 	mov ax, word [reservedSectors]
 	mov word [dap_lba], ax
-	xor bx, bx
-	mov es, bx
 	mov bx, 0x7e00
 	call read_sectors
 
 ; load image
 
 load_img_cluster:
-	mov ax, [image_cluster]				; cluster to read
-    call cluster_to_lba					
-	mov word [dap_lba], ax
-	xor bx, bx
-	mov es, bx
 	mov bx, 0x8a00
-
-	mov cx, word [sectorsPerCluster]
+	
+.read_img_cluster:
+	mov ax, word [image_cluster]				; cluster to read
+	call cluster_to_lba						
+	mov word [dap_lba], ax
+	xor cx, cx
+	mov cl, byte [sectorsPerCluster]
+	
 .loop_load_img:
 	call read_sectors                    ; read in cluster
-
 	add word [dap_lba], 1
-	add bx, 0x200
-	
+	add bx, word [bytesPerSector]
 	loop .loop_load_img
 
-; check which cluster to load next (or stop loading if image_cluster >= 0xfff8)
-	; get values at cluster position from FAT
+	; get next cluster from fat
+	; Possible values for FAT16 are: 
+	; 0000: free, 
+	; 0002-ffef: cluster in use; the value given is the number of the next cluster in the file, 
+	; fff0-fff6: reserved, 
+	; fff7: bad cluster, 
+	; fff8-ffff: cluster in use, the last one in this file.
 	
+	mov ax, word [image_cluster]
+	add ax, 4								; add offset
+	mov dx, 0x7e00							; point where fat is loaded
+	add dx, ax								; add the cluster number to refernce the new cluster
+	mov di, dx								;
+	mov ax, word [di]						;
+	cmp ax, 0xfff8							; if ax >= 0xfff8 -> done
+	jge load_img_done
+	mov word [image_cluster], ax			; else we gonna read the next cluster
+	jmp .read_img_cluster
 	
+load_img_done:
+
+	mov si, 0x8a00
+	call print_line
+
 	jmp halt_cpu
-	
+
 err_read_drive_sect:
 	mov si, msg_read_drive_err
 	call print_line
@@ -205,18 +217,19 @@ cluster_to_lba: ; (ax) lba = (cluster_num - 2) * num_of_sect_in_cluster
 
 ; Disk address packet
 dap:
-dap_packet_size: 		db 0x10 		; packet size
+dap_packet_size: 		db 0x10 		; packet size (16 bytes)
 dap_reserved:   		db 0x00			; 0
 dap_sectors_number:  	dw 0x01			; sectors to load
 dap_buf_off:    		dw 0x7e00		; offset where to load
 dap_buf_seg:    		dw 0x0000		; segment where to load
-dap_lba:        		dd 0x1			; from where to load lba
-            			dd 0x0
+dap_lba:        		dd 0x1			; high lba field
+            			dd 0x0			; low lba fiel for larger adresses
 
 datasector				dw 0x0000
 image_cluster			dw 0x0000
 debug					dw 0x0000
-image_name				dw "CONFIG     ", 0
+; image_name				dw "NOVALDR SYS", 0
+image_name				dw "LONG    TXT", 0
 msg_loading				db "Loading Boot Image ", 0
 msg_read_drive_err		db "Error reading sector!", 0
 msg_image_missing		db "Missing Image!", 0
