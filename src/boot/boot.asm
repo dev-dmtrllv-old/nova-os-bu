@@ -99,7 +99,7 @@ found_image:
 
 ; load image
 load_img_cluster:
-	mov bx, 0x8a00
+	mov bx, 0x8000
 	xor ax, ax
 	mov es, ax
 	
@@ -110,7 +110,7 @@ read_img_cluster:
 	xor cx, cx
 	mov cl, byte [sectorsPerCluster]
 	call read_sectors								; read in cluster
-	; jmp halt_cpu
+	
 	; get next cluster from fat
 	; Possible values for FAT16 are: 
 	; 0000: free, 
@@ -131,9 +131,10 @@ read_img_cluster:
 	jmp read_img_cluster
 	
 load_img_done:
-	mov si, 0x8a00
-	call print_line
-
+	xor ax, ax
+	mov es, ax
+	mov ds, ax
+	jmp 0x0000:0x8000
 	jmp halt_cpu
 
 err_read_drive_sect:
@@ -236,7 +237,7 @@ dap_lba:        		dd 0x1			; high lba field
 
 datasector				dw 0x0000
 image_cluster			dw 0x0000
-image_name				dw "LONG    TXT", 0
+image_name				dw "NOVALDR SYS", 0
 msg_loading				db "Loading Boot Image ", 0
 msg_read_drive_err		db "Error reading sector!", 0
 msg_image_missing		db "Missing Image!", 0

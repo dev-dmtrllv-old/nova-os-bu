@@ -3,7 +3,7 @@ out/boot.bin: src/boot/boot.asm
 	@mkdir -p out
 	nasm -f bin $^ -o $@
 
-kernel_loader: src/boot/kernel_loader.asm
+out/NOVALDR.SYS: src/boot/kernel_loader.asm
 	@mkdir -p out
 	nasm -f bin $^ -o out/NOVALDR.SYS
 
@@ -13,11 +13,12 @@ dump: os.img
 run: os.img
 	qemu-system-x86_64 -drive file=$^,format=raw -m 1024 -vga std -serial stdio
 
-os.img:	out/boot.bin
+os.img:	out/boot.bin out/NOVALDR.SYS
 	test -e $@ || mkfs.fat -F 16 -C $@ 512000
 	dd bs=1 if=out/boot.bin count=3 of=$@ conv=notrunc
 	# skip 91 bytes from out boot.bin because this is the BPB created by the formatter
 	dd bs=1 skip=62 if=out/boot.bin iflag=skip_bytes of=$@ seek=62 conv=notrunc
+	mcopy -n -o -i os.img out/NOVALDR.SYS ::/NOVALDR.SYS
 
 clean:
 	rm -rf out/*
