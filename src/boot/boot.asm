@@ -36,7 +36,7 @@ boot_start:
 	mov ds, ax
 	mov es, ax
 	mov fs, ax
-	mov gs, ax
+	; mov gs, ax
 	mov ss, ax
 	mov ax, 0x7c00
    	mov sp, ax	 				; stack pointer (grows downwards from 0x7c00 -> 0x0000)
@@ -104,12 +104,12 @@ load_img_cluster:
 	mov es, ax
 	
 read_img_cluster:
-	mov ax, word [image_cluster]				; cluster to read
+	mov ax, word [image_cluster]					; cluster to read
 	call cluster_to_lba						
 	mov word [dap_lba], ax
 	xor cx, cx
 	mov cl, byte [sectorsPerCluster]
-	call read_sectors                    ; read in cluster
+	call read_sectors								; read in cluster
 	; jmp halt_cpu
 	; get next cluster from fat
 	; Possible values for FAT16 are: 
@@ -118,28 +118,16 @@ read_img_cluster:
 	; fff0-fff6: reserved, 
 	; fff7: bad cluster, 
 	; fff8-ffff: cluster in use, the last one in this file.
-	
-	; prepare next es:bx buffer pointer
-	mov bx, word [dap_buf_off]
-	sub bx, word [bytesPerSector]
-	cmp bx, word [dap_buf_off]
-	jg .skip_seg_fix
-	mov ax, word [dap_buf_seg]
-	sub ax, 0x1000
-	mov es, ax
-	.skip_seg_fix:
-
 
 	; get next cluster to read
-	mov ax, word [image_cluster]
-	add ax, 4								; add offset
-	mov dx, 0x7e00							; point where fat is loaded
-	add dx, ax								; add the cluster number to refernce the new cluster
-	mov di, dx								;
-	mov ax, word [di]						;
-	cmp ax, 0xfff8							; if ax >= 0xfff8 -> done
-	jge load_img_done
-	mov word [image_cluster], ax			; else we gonna read the next cluster
+	mov ax, 0x7e04							; point where fat is loaded + offset
+	add ax, word [image_cluster]			; add the cluster number to refernce the new cluster
+	mov di, ax
+	mov ax, word [di]
+	
+	cmp ax, 0xffff
+	je load_img_done
+	mov word [image_cluster], ax
 	jmp read_img_cluster
 	
 load_img_done:
@@ -193,7 +181,6 @@ cls:
     int 0x10
 	popa
     ret
-
 
 read_sectors: ; es:bx = buffer pointer, cx = clusters to read
 ; push es
@@ -260,3 +247,4 @@ msg_EOL					db 13, 10, 0
 ;---------------------------;
 	times 510-($-$$) db 0
 	dw 0AA55h
+test:
