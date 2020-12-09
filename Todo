@@ -1,2 +1,0 @@
-FAT 16: 
-  ☐ Add routines to load a file from cluster into memory (cluster to sectors) @file:///D:/code/asm-kernel/first-bootloader/src/boot/boot.asm#186
