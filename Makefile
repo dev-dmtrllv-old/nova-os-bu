@@ -5,7 +5,20 @@ out/boot.bin: src/boot/boot.asm
 
 out/NOVALDR.SYS: src/boot/kernel_loader.asm
 	@mkdir -p out
-	nasm -f bin $^ -o out/NOVALDR.SYS
+	nasm -f bin $^ -o out/kernel_loader.o
+	
+out/NOVALDR.BIN: out/novaldr.o out/novaldr_c.o
+	ld -static -Tlink.ld -nostdlib --nmagic $^ -o boot.elf
+	objcopy -O binary boot.elf $@
+
+
+out/novaldr.o: src/boot/kernel_loader.asm
+	@mkdir -p out
+	nasm -f elf64 $^ -o $@
+
+out/novaldr_c.o: src/boot/kernel_loader.c
+	gcc -c -g -Os -march=x86-64 -ffreestanding -Wall -Werror $^ -o $@
+
 
 dump: os.img
 	xxd $^ > os.dump
@@ -13,12 +26,12 @@ dump: os.img
 run: os.img
 	qemu-system-x86_64 -drive file=$^,format=raw -m 1024 -vga std -serial stdio
 
-os.img:	out/boot.bin out/NOVALDR.SYS
+os.img:	out/boot.bin out/NOVALDR.BIN
 	test -e $@ || mkfs.fat -F 16 -C $@ 512000
 	dd bs=1 if=out/boot.bin count=3 of=$@ conv=notrunc
 	# skip 91 bytes from out boot.bin because this is the BPB created by the formatter
 	dd bs=1 skip=62 if=out/boot.bin iflag=skip_bytes of=$@ seek=62 conv=notrunc
-	mcopy -n -o -i os.img out/NOVALDR.SYS ::/NOVALDR.SYS
+	mcopy -n -o -i os.img out/NOVALDR.BIN ::/NOVALDR.BIN
 
 clean:
 	rm -rf out/*
@@ -32,6 +45,11 @@ debug_client:
 	
 debug: os.img
 	qemu-system-x86_64 -s -S -drive file=$^,format=raw -m 1024 -vga std
+
+test-c: out/kernel_loader.o src/boot/test.c
+	i686-elf-gcc -std=gnu99 -ffreestanding -g -c src/boot/test.c -o out/test.o
+	i686-elf-gcc -ffreestanding -nostdlib -g -T linker.ld out/kernel_loader.o out/test.o -o mykernel.elf -lgcc
+	# x86_64-elf-gcc -ffreestanding -mcmodel=large -mno-red-zone -mno-mmx -mno-sse -mno-sse2 -c src/boot/test.c -o out/test.o
 
 # test:
 # 	qemu-system-x86_64 -drive file=os.img,format=raw -m 1024 -vga std
